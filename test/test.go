@@ -1,20 +1,17 @@
 package main
 
 import (
-	"fmt"
-
 	"crypto/sha256"
+	"fmt"
+	"os"
+	"strconv"
+
+	"github.com/coinexchain/randsrc"
 )
 
 /*
-#include "sha256lib/sha256.h"
+#include "../sha256.h"
 #include <stdint.h>
-
-//struct bytes32 sha256go(_GoString_ gostr) {
-//    size_t length = _GoStringLen(gostr);
-//    const char * data = _GoStringPtr(gostr);
-//    return sha256((const uint8_t *)data, length);
-//}
 
 struct bytes32 {
     uint8_t bytes[32];
@@ -32,7 +29,7 @@ struct bytes32 sha256go(_GoString_ gostr) {
 }
 
 */
-// #cgo LDFLAGS: -lsha256 -L.
+// #cgo LDFLAGS: -lsha256 -L..
 import "C"
 
 func Sha256(s string) (result [32]byte){
@@ -43,13 +40,38 @@ func Sha256(s string) (result [32]byte){
 	return
 }
 
+func fuzzTest() {
+	randFilename := os.Getenv("RANDFILE")
+	if len(randFilename) == 0 {
+		fmt.Printf("No RANDFILE specified. Exiting...")
+		return
+	}
+	roundCount, err := strconv.Atoi(os.Getenv("RANDCOUNT"))
+	if err != nil {
+		fmt.Printf("Fuzz test not run. Error when Parsing RANDCOUNT: %#v\n", err)
+		return
+	}
+
+	rs := randsrc.NewRandSrcFromFile(randFilename)
+
+	for i := 0; i< roundCount; i++ {
+		length := 1 + int(rs.GetUint32()) % 300
+		s := rs.GetString(length)
+		ref := sha256.Sum256([]byte(s))
+		imp := Sha256(s)
+		if ref != imp {
+			panic("Not Equal")
+		}
+	}
+	fmt.Printf("%d test finished\n", roundCount)
+}
+
 func main() {
-	//ok := C.supports_sha_ni();
-	//fmt.Println("Here %d", ok)
 	hello := "Hello! World 12122Hello! World 12122Hello! World 121222Hello! World 121222Hello! World 121222Hello! World 12122222Hello! World 121222"
 	fmt.Printf("length %d\n", len(hello))
 	fmt.Printf("hash.c  %#v\n", Sha256(hello))
 	fmt.Printf("hash.go %#v\n", sha256.Sum256([]byte(hello)))
+	fuzzTest()
 }
 
 
